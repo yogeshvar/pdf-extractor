@@ -57,6 +57,22 @@ curl http://localhost:8000/api/jobs/<id>/csv?draft=1
 | `OPENROUTER_API_KEY` | — | Required. https://openrouter.ai/keys |
 | `OPENROUTER_MODEL` | `google/gemini-2.5-flash` | Any vision-capable OpenRouter model |
 | `DATA_DIR` | `./data` | Where the SQLite job store lives |
+| `ACCESS_USERNAME` | — | HTTP Basic Auth username (enable auth when set with password) |
+| `ACCESS_PASSWORD` | — | HTTP Basic Auth password |
+| `DISABLE_AUTH` | — | Set `true` to skip auth (local dev only) |
+
+## Access control
+
+When `ACCESS_USERNAME` and `ACCESS_PASSWORD` are set, the browser prompts for
+credentials before any page or API call. `/health` stays public for hosting
+health checks.
+
+```bash
+curl -u demo:your-password -F "file=@brochure.pdf" https://your-app/api/jobs
+```
+
+On Railway, add `ACCESS_USERNAME` and `ACCESS_PASSWORD` as service variables.
+Do **not** set `DISABLE_AUTH` in production.
 
 ## Deploy (Render / Railway / Fly.io)
 
@@ -64,7 +80,11 @@ A `Dockerfile` is included:
 
 ```bash
 docker build -t package-extractor .
-docker run -p 8000:8000 -e OPENROUTER_API_KEY=sk-or-... package-extractor
+docker run -p 8000:8000 \
+  -e OPENROUTER_API_KEY=sk-or-... \
+  -e ACCESS_USERNAME=demo \
+  -e ACCESS_PASSWORD=your-password \
+  package-extractor
 ```
 
 On any container host: deploy the Dockerfile, set `OPENROUTER_API_KEY`,

@@ -155,6 +155,7 @@ async function save() {
     method: 'PUT',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ packages }),
+    credentials: 'same-origin',
   });
   if (!resp.ok) {
     const data = await resp.json().catch(() => ({}));
@@ -172,7 +173,7 @@ document.getElementById('saveBtn').addEventListener('click', save);
 document.getElementById('approveBtn').addEventListener('click', async () => {
   if (!confirm('Approve this extraction? The CSV will be marked as final.')) return;
   if (!await save()) return;
-  const resp = await fetch(`/api/jobs/${jobId}/approve`, { method: 'POST' });
+  const resp = await fetch(`/api/jobs/${jobId}/approve`, { method: 'POST', credentials: 'same-origin' });
   if (resp.ok) { job = await resp.json(); packages = job.packages; render(); }
 });
 
@@ -189,7 +190,7 @@ document.getElementById('addPkg').addEventListener('click', () => {
 });
 
 (async function init() {
-  const resp = await fetch(`/api/jobs/${jobId}`);
+  const resp = await fetch(`/api/jobs/${jobId}`, { credentials: 'same-origin' });
   if (!resp.ok) {
     document.getElementById('jobTitle').textContent = 'Job not found';
     return;
