@@ -8,12 +8,20 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-from fastapi import FastAPI, File, HTTPException, UploadFile
-from fastapi.responses import FileResponse, PlainTextResponse, Response
+from fastapi import FastAPI, File, HTTPException, Request, UploadFile
+from fastapi.responses import FileResponse, JSONResponse, PlainTextResponse, Response
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
-from .auth import BasicAuthMiddleware, log_auth_status
+from .auth import (
+    SESSION_COOKIE,
+    SESSION_MAX_AGE,
+    BasicAuthMiddleware,
+    auth_enabled,
+    create_session_token,
+    credentials_valid,
+    log_auth_status,
+)
 from .csv_writer import packages_to_csv
 from .extractor import ExtractionError, extract_packages
 from .schema import Package
@@ -36,6 +44,32 @@ STATIC_DIR = Path(__file__).resolve().parent.parent / "static"
 
 class PackagesUpdate(BaseModel):
     packages: list[Package]
+
+
+class LoginRequest(BaseModel):
+    username: str
+    password: str
+
+
+@app.post("/api/login")
+async def login(body: LoginRequest, request: Request):
+    if not auth_enabled():
+        return JSONResponse({"ok": True})
+    if not credentials_valid(body.username, body.password):
+        raise HTTPException(401, "Invalid username or password")
+    secure = request.url.scheme == "https" or (
+        request.headers.get("x-forwarded-proto", "").split(",")[0].strip() == "https"
+    )
+    response = JSONResponse({"ok": True})
+    response.set_cookie(
+        SESSION_COOKIE,
+        create_session_token(),
+        max_age=SESSION_MAX_AGE,
+        httponly=True,
+        samesite="lax",
+        secure=secure,
+    )
+    return response
 
 
 @app.get("/health")
@@ -125,6 +159,11 @@ async def get_job_csv(job_id: str, draft: bool = False):
         media_type="text/csv",
         headers={"Content-Disposition": f'attachment; filename="{filename}"'},
     )
+
+
+@app.get("/login")
+async def login_page():
+    return FileResponse(STATIC_DIR / "login.html")
 
 
 @app.get("/review/{job_id}")
