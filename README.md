@@ -1,4 +1,4 @@
-# ArogyaNow Package Extractor (POC)
+# PDF Extractor (POC)
 
 Converts hospital health-checkup brochure PDFs into the standard
 "New Package(s) Template" CSV format using an LLM via OpenRouter — with a
