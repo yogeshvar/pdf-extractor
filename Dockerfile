@@ -9,6 +9,6 @@ COPY app ./app
 COPY static ./static
 
 ENV DATA_DIR=/srv/data
-EXPOSE 8000
 
-CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
+# Railway (and most PaaS hosts) inject PORT at runtime — do not hardcode 8000.
+CMD ["sh", "-c", "uvicorn app.main:app --host 0.0.0.0 --port ${PORT:-8000}"]

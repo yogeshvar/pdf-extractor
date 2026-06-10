@@ -89,3 +89,18 @@ docker run -p 8000:8000 \
 
 On any container host: deploy the Dockerfile, set `OPENROUTER_API_KEY`,
 and mount a volume at `/srv/data` so jobs survive restarts.
+
+### Railway checklist
+
+| Setting | Value |
+| --- | --- |
+| Volume mount | `/srv/data` |
+| `DATA_DIR` | `/srv/data` |
+| `OPENROUTER_API_KEY` | your key |
+| `ACCESS_USERNAME` / `ACCESS_PASSWORD` | demo credentials |
+| Health check path | `/health` |
+| Port | **Do not set `PORT` manually** — Railway injects it; the Dockerfile reads `${PORT}` |
+
+If health checks fail with "service unavailable", the app was almost certainly
+listening on the wrong port (fixed in Dockerfile via `${PORT:-8000}`).
+Redeploy after pulling the latest code.
