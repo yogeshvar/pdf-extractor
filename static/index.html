@@ -1,0 +1,110 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ArogyaNow — Package Extractor</title>
+<link rel="stylesheet" href="/style.css">
+</head>
+<body>
+<header class="topbar">
+  <div class="logo">A</div>
+  <div>
+    <h1>Package Extractor</h1>
+    <div class="sub">Hospital brochure PDF → package template CSV, with human review</div>
+  </div>
+</header>
+
+<main>
+  <div id="dropzone" class="dropzone">
+    <div style="font-size:34px; margin-bottom:8px;">&#8682;</div>
+    <div><strong>Drop a hospital brochure PDF here</strong> or click to browse</div>
+    <div class="muted" style="margin-top:6px; font-size:13px;">
+      The AI extracts every package into the template format, then you review &amp; approve.
+    </div>
+    <input type="file" id="fileInput" accept="application/pdf" hidden>
+  </div>
+
+  <div id="uploadStatus" style="margin-top:16px;"></div>
+
+  <h2 style="margin-top:40px; font-size:17px;">Jobs</h2>
+  <div class="card" style="padding:0;">
+    <table>
+      <thead>
+        <tr><th>File</th><th>Status</th><th>Packages</th><th>Uploaded</th><th></th></tr>
+      </thead>
+      <tbody id="jobsBody">
+        <tr><td colspan="5" class="muted" style="text-align:center; padding:24px;">Loading…</td></tr>
+      </tbody>
+    </table>
+  </div>
+</main>
+
+<script>
+const dz = document.getElementById('dropzone');
+const fileInput = document.getElementById('fileInput');
+const statusEl = document.getElementById('uploadStatus');
+
+dz.addEventListener('click', () => fileInput.click());
+dz.addEventListener('dragover', e => { e.preventDefault(); dz.classList.add('drag'); });
+dz.addEventListener('dragleave', () => dz.classList.remove('drag'));
+dz.addEventListener('drop', e => {
+  e.preventDefault(); dz.classList.remove('drag');
+  if (e.dataTransfer.files.length) upload(e.dataTransfer.files[0]);
+});
+fileInput.addEventListener('change', () => {
+  if (fileInput.files.length) upload(fileInput.files[0]);
+});
+
+async function upload(file) {
+  if (!file.name.toLowerCase().endsWith('.pdf')) {
+    statusEl.innerHTML = '<span class="error">Please upload a PDF file.</span>';
+    return;
+  }
+  statusEl.innerHTML = `<div class="card" style="display:flex; align-items:center; gap:12px;">
+    <span class="spinner" style="border-color:#0f766e44; border-top-color:#0f766e;"></span>
+    <span>Extracting packages from <strong>${esc(file.name)}</strong>… this usually takes 30–90 seconds.</span>
+  </div>`;
+  const fd = new FormData();
+  fd.append('file', file);
+  try {
+    const resp = await fetch('/api/jobs', { method: 'POST', body: fd });
+    const data = await resp.json();
+    if (!resp.ok) throw new Error(data.detail || 'Upload failed');
+    location.href = `/review/${data.id}`;
+  } catch (err) {
+    statusEl.innerHTML = `<span class="error">${esc(err.message)}</span>`;
+    loadJobs();
+  }
+}
+
+function esc(s) {
+  return String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+
+async function loadJobs() {
+  const resp = await fetch('/api/jobs');
+  const { jobs } = await resp.json();
+  const body = document.getElementById('jobsBody');
+  if (!jobs.length) {
+    body.innerHTML = '<tr><td colspan="5" class="muted" style="text-align:center; padding:24px;">No jobs yet — upload a brochure to get started.</td></tr>';
+    return;
+  }
+  body.innerHTML = jobs.map(j => `
+    <tr>
+      <td>${esc(j.filename)}</td>
+      <td><span class="pill ${j.status}">${j.status.replace('_', ' ')}</span>
+          ${j.error ? `<div class="error" style="font-size:12px;">${esc(j.error)}</div>` : ''}</td>
+      <td>${j.package_count}</td>
+      <td class="muted">${new Date(j.created_at).toLocaleString()}</td>
+      <td style="text-align:right;">
+        ${j.status === 'needs_review' ? `<a class="btn primary" href="/review/${j.id}">Review</a>` : ''}
+        ${j.status === 'approved' ? `<a class="btn" href="/review/${j.id}">View</a>
+          <a class="btn primary" href="/api/jobs/${j.id}/csv">CSV</a>` : ''}
+      </td>
+    </tr>`).join('');
+}
+loadJobs();
+</script>
+</body>
+</html>

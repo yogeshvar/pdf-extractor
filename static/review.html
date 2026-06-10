@@ -1,0 +1,203 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Review — ArogyaNow Package Extractor</title>
+<link rel="stylesheet" href="/style.css">
+<style>
+  body { overflow: hidden; }
+  .layout { display: flex; height: calc(100vh - 61px); }
+  .pdf-pane { flex: 1 1 45%; border-right: 1px solid var(--line); background: #525659; }
+  .pdf-pane iframe { width: 100%; height: 100%; border: none; }
+  .review-pane { flex: 1 1 55%; overflow-y: auto; padding: 20px 24px 80px; }
+  .pkg-card { background: var(--card); border: 1px solid var(--line); border-radius: var(--radius); padding: 18px; margin-bottom: 18px; }
+  .pkg-head { display: flex; align-items: center; gap: 10px; margin-bottom: 12px; }
+  .pkg-head input { font-size: 16px; font-weight: 600; flex: 1; }
+  .notes { background: #fffbeb; border: 1px solid #fde68a; color: #92400e; border-radius: 8px; padding: 8px 12px; font-size: 13px; margin-bottom: 12px; }
+  label { display: block; font-size: 12px; font-weight: 600; color: var(--muted); margin: 10px 0 3px; text-transform: uppercase; letter-spacing: .03em; }
+  input[type=text], textarea {
+    width: 100%; font: inherit; border: 1px solid var(--line); border-radius: 8px;
+    padding: 7px 10px; background: #fafafa; color: var(--ink);
+  }
+  input[type=text]:focus, textarea:focus { outline: 2px solid #0f766e33; border-color: var(--accent); background: #fff; }
+  textarea { resize: vertical; min-height: 56px; }
+  .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 0 14px; }
+  .grid4 { display: grid; grid-template-columns: repeat(4, 1fr); gap: 0 14px; }
+  .toolbar { display: flex; gap: 10px; align-items: center; margin-left: auto; }
+  details.more summary { cursor: pointer; font-size: 13px; color: var(--accent); margin-top: 12px; }
+  .del-btn { color: var(--bad); border-color: #fecaca; background: #fff; font-size: 13px; }
+  .savebar { position: fixed; bottom: 0; left: 45%; right: 0; background: var(--card); border-top: 1px solid var(--line); padding: 10px 24px; display: flex; gap: 10px; align-items: center; }
+</style>
+</head>
+<body>
+<header class="topbar">
+  <a href="/" style="font-size:20px; text-decoration:none; color:var(--muted);">&#8592;</a>
+  <div class="logo">A</div>
+  <div>
+    <h1 id="jobTitle">Loading…</h1>
+    <div class="sub" id="jobSub"></div>
+  </div>
+  <div class="toolbar">
+    <span id="statusPill"></span>
+  </div>
+</header>
+
+<div class="layout">
+  <div class="pdf-pane"><iframe id="pdfFrame" title="Original PDF"></iframe></div>
+  <div class="review-pane">
+    <div id="packages"></div>
+    <button id="addPkg">+ Add package</button>
+  </div>
+</div>
+
+<div class="savebar">
+  <button id="saveBtn">Save draft</button>
+  <button id="approveBtn" class="primary">Approve &amp; finalize</button>
+  <a id="csvBtn" class="btn">Download CSV</a>
+  <span id="saveMsg" class="muted" style="font-size:13px;"></span>
+</div>
+
+<script>
+const jobId = location.pathname.split('/').pop();
+let job = null;
+let packages = [];
+
+const LIST_FIELDS = [
+  ['blood_tests', 'Blood tests'],
+  ['other_tests', 'Other tests'],
+  ['radiology', 'Radiology'],
+  ['consultations', 'Consultations'],
+];
+const MORE_FIELDS = [
+  ['description', 'Description'],
+  ['why_choose', 'Why choose this package'],
+  ['preparation_guidelines', 'Preparation guidelines'],
+  ['important_notes', 'Important notes / contraindications'],
+  ['concierge_services', 'Concierge services'],
+  ['tests_included', 'Tests included (summary)'],
+  ['faqs', 'FAQs'],
+  ['review_notes', 'Review notes (from AI)'],
+];
+
+function esc(s) {
+  return String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+
+function render() {
+  document.getElementById('jobTitle').textContent = job.filename;
+  document.getElementById('jobSub').textContent =
+    `${packages.length} package(s) · model: ${job.meta.model || '?'} · mode: ${job.meta.mode || '?'}`;
+  document.getElementById('statusPill').innerHTML =
+    `<span class="pill ${job.status}">${job.status.replace('_', ' ')}</span>`;
+  document.getElementById('pdfFrame').src = `/api/jobs/${jobId}/pdf`;
+  document.getElementById('approveBtn').style.display = job.status === 'needs_review' ? '' : 'none';
+  document.getElementById('csvBtn').href = `/api/jobs/${jobId}/csv` + (job.status === 'approved' ? '' : '?draft=1');
+  document.getElementById('csvBtn').textContent = job.status === 'approved' ? 'Download CSV' : 'Download draft CSV';
+
+  const wrap = document.getElementById('packages');
+  wrap.innerHTML = packages.map((p, i) => `
+    <div class="pkg-card" data-i="${i}">
+      <div class="pkg-head">
+        <input type="text" data-f="package_name" value="${esc(p.package_name)}" placeholder="Package name">
+        <span class="badge-conf ${esc(p.confidence || 'high')}">${esc(p.confidence || 'high')}</span>
+        <button class="del-btn" data-del="${i}">Delete</button>
+      </div>
+      ${p.review_notes ? `<div class="notes">&#9888; ${esc(p.review_notes)}</div>` : ''}
+      <div class="grid4">
+        <div><label>Price</label><input type="text" data-f="price" value="${esc(p.price)}"></div>
+        <div><label>Gender</label><input type="text" data-f="gender" value="${esc(p.gender)}"></div>
+        <div><label>Age range</label><input type="text" data-f="age_range" value="${esc(p.age_range)}"></div>
+        <div><label>Hospital</label><input type="text" data-f="hospital_name" value="${esc(p.hospital_name)}"></div>
+      </div>
+      <div class="grid2">
+        ${LIST_FIELDS.map(([f, lbl]) => `
+          <div>
+            <label>${lbl} (one per line)</label>
+            <textarea data-f="${f}" rows="${Math.min(Math.max((p[f] || []).length, 2), 10)}">${esc((p[f] || []).join('\n'))}</textarea>
+          </div>`).join('')}
+      </div>
+      <details class="more">
+        <summary>More fields (description, guidelines, notes…)</summary>
+        ${MORE_FIELDS.map(([f, lbl]) => `
+          <label>${lbl}</label>
+          <textarea data-f="${f}" rows="2">${esc(p[f])}</textarea>`).join('')}
+      </details>
+    </div>`).join('');
+
+  wrap.querySelectorAll('[data-del]').forEach(btn => btn.addEventListener('click', () => {
+    if (!confirm('Delete this package?')) return;
+    collect();
+    packages.splice(Number(btn.dataset.del), 1);
+    render();
+  }));
+}
+
+function collect() {
+  document.querySelectorAll('.pkg-card').forEach(card => {
+    const p = packages[Number(card.dataset.i)];
+    card.querySelectorAll('[data-f]').forEach(el => {
+      const f = el.dataset.f;
+      if (LIST_FIELDS.some(([lf]) => lf === f)) {
+        p[f] = el.value.split('\n').map(s => s.trim()).filter(Boolean);
+      } else {
+        p[f] = el.value;
+      }
+    });
+  });
+}
+
+async function save() {
+  collect();
+  const msg = document.getElementById('saveMsg');
+  msg.textContent = 'Saving…';
+  const resp = await fetch(`/api/jobs/${jobId}/packages`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ packages }),
+  });
+  if (!resp.ok) {
+    const data = await resp.json().catch(() => ({}));
+    msg.innerHTML = `<span class="error">${esc(data.detail || 'Save failed')}</span>`;
+    return false;
+  }
+  job = await resp.json();
+  packages = job.packages;
+  msg.textContent = `Saved at ${new Date().toLocaleTimeString()}`;
+  return true;
+}
+
+document.getElementById('saveBtn').addEventListener('click', save);
+
+document.getElementById('approveBtn').addEventListener('click', async () => {
+  if (!confirm('Approve this extraction? The CSV will be marked as final.')) return;
+  if (!await save()) return;
+  const resp = await fetch(`/api/jobs/${jobId}/approve`, { method: 'POST' });
+  if (resp.ok) { job = await resp.json(); packages = job.packages; render(); }
+});
+
+document.getElementById('addPkg').addEventListener('click', () => {
+  collect();
+  packages.push({
+    package_name: '', description: '', tests_included: '', blood_tests: [],
+    other_tests: [], radiology: [], consultations: [], why_choose: '',
+    preparation_guidelines: '', important_notes: '', concierge_services: '',
+    age_range: '', gender: '', hospital_name: job.packages[0]?.hospital_name || '',
+    price: '', faqs: '', confidence: 'high', review_notes: '',
+  });
+  render();
+});
+
+(async function init() {
+  const resp = await fetch(`/api/jobs/${jobId}`);
+  if (!resp.ok) {
+    document.getElementById('jobTitle').textContent = 'Job not found';
+    return;
+  }
+  job = await resp.json();
+  packages = job.packages;
+  render();
+})();
+</script>
+</body>
+</html>
