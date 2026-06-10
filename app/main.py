@@ -13,6 +13,7 @@ from fastapi.responses import FileResponse, PlainTextResponse, Response
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
+from .auth import BasicAuthMiddleware, log_auth_status
 from .csv_writer import packages_to_csv
 from .extractor import ExtractionError, extract_packages
 from .schema import Package
@@ -22,7 +23,13 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 app = FastAPI(title="ArogyaNow Package Extractor", version="0.1.0")
+app.add_middleware(BasicAuthMiddleware)
 store = JobStore()
+
+
+@app.on_event("startup")
+async def startup():
+    log_auth_status()
 
 STATIC_DIR = Path(__file__).resolve().parent.parent / "static"
 

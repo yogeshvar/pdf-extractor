@@ -68,7 +68,7 @@ async function upload(file) {
   const fd = new FormData();
   fd.append('file', file);
   try {
-    const resp = await fetch('/api/jobs', { method: 'POST', body: fd });
+    const resp = await fetch('/api/jobs', { method: 'POST', body: fd, credentials: 'same-origin' });
     const data = await resp.json();
     if (!resp.ok) throw new Error(data.detail || 'Upload failed');
     location.href = `/review/${data.id}`;
@@ -83,7 +83,7 @@ function esc(s) {
 }
 
 async function loadJobs() {
-  const resp = await fetch('/api/jobs');
+  const resp = await fetch('/api/jobs', { credentials: 'same-origin' });
   const { jobs } = await resp.json();
   const body = document.getElementById('jobsBody');
   if (!jobs.length) {
