@@ -1,0 +1,78 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Sign in — ArogyaNow</title>
+<link rel="stylesheet" href="/style.css">
+</head>
+<body class="login-page">
+<div class="login-shell">
+  <div class="login-card card">
+    <div class="login-brand">
+      <div class="logo">A</div>
+      <div>
+        <h1>Package Extractor</h1>
+        <p class="sub">Sign in to continue</p>
+      </div>
+    </div>
+
+    <form id="loginForm" class="login-form" autocomplete="on">
+      <div id="errorBox" class="login-error" hidden></div>
+
+      <label class="field">
+        <span>Username</span>
+        <input type="text" id="username" name="username" autocomplete="username" required autofocus>
+      </label>
+
+      <label class="field">
+        <span>Password</span>
+        <input type="password" id="password" name="password" autocomplete="current-password" required>
+      </label>
+
+      <button type="submit" class="primary login-submit" id="submitBtn">Sign in</button>
+    </form>
+  </div>
+</div>
+
+<script>
+const form = document.getElementById('loginForm');
+const errorBox = document.getElementById('errorBox');
+const submitBtn = document.getElementById('submitBtn');
+const params = new URLSearchParams(location.search);
+const next = params.get('next') || '/';
+
+form.addEventListener('submit', async (e) => {
+  e.preventDefault();
+  errorBox.hidden = true;
+  submitBtn.disabled = true;
+  submitBtn.innerHTML = '<span class="spinner" style="border-color:#ffffff55;border-top-color:#fff;"></span> Signing in…';
+
+  try {
+    const resp = await fetch('/api/login', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      credentials: 'same-origin',
+      body: JSON.stringify({
+        username: document.getElementById('username').value,
+        password: document.getElementById('password').value,
+      }),
+    });
+    if (resp.ok) {
+      location.href = next.startsWith('/') ? next : '/';
+      return;
+    }
+    const data = await resp.json().catch(() => ({}));
+    errorBox.textContent = data.detail || 'Invalid username or password.';
+    errorBox.hidden = false;
+  } catch {
+    errorBox.textContent = 'Could not reach the server. Try again.';
+    errorBox.hidden = false;
+  } finally {
+    submitBtn.disabled = false;
+    submitBtn.textContent = 'Sign in';
+  }
+});
+</script>
+</body>
+</html>
